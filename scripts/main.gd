@@ -24,6 +24,11 @@ var event_label: Label
 var event_text: String = "Смена началась. Добро пожаловать, начальник!"
 var admin_panel: Panel
 var admin_status_label: Label
+var settings_panel: Panel
+var settings_status: Label
+var pin_input: LineEdit
+var admin_unlocked: bool = false
+var settings_admin_tab: Button
 
 const INCIDENTS := [
 	{"title":"Кража в магазине", "desc":"Подозреваемый замечен у выхода. Направь патруль.", "reward":360, "risk":10},
@@ -174,9 +179,10 @@ func _build_ui() -> void:
 	upgrade_buttons.append(upgrade3)
 	event_label = _label(event_text, Vector2(30,424), 12, Color(0.55,0.86,0.71))
 	event_label.size = Vector2(890, 24)
-	var admin_open := _button("⚙ АДМИН", Vector2(820, 8), Vector2(118, 30), Color(0.48, 0.18, 0.24))
-	admin_open.add_theme_font_size_override("font_size", 12)
-	admin_open.pressed.connect(_toggle_admin)
+	var settings_open := _button("⚙ НАСТРОЙКИ", Vector2(812, 8), Vector2(136, 30), Color(0.15, 0.31, 0.46))
+	settings_open.add_theme_font_size_override("font_size", 12)
+	settings_open.pressed.connect(_toggle_settings)
+	_build_settings_panel()
 	_build_admin_panel()
 
 func _label(text_value: String, pos: Vector2, font_size: int, color: Color) -> Label:
@@ -285,8 +291,8 @@ func _format_number(value: int) -> String:
 
 func _build_admin_panel() -> void:
 	admin_panel = Panel.new()
-	admin_panel.position = Vector2(185, 115)
-	admin_panel.size = Vector2(590, 300)
+	admin_panel.position = Vector2(20, 70)
+	admin_panel.size = Vector2(610, 300)
 	admin_panel.visible = false
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.035, 0.055, 0.085, 0.99)
@@ -294,7 +300,7 @@ func _build_admin_panel() -> void:
 	panel_style.set_border_width_all(2)
 	panel_style.set_corner_radius_all(16)
 	admin_panel.add_theme_stylebox_override("panel", panel_style)
-	ui.add_child(admin_panel)
+	settings_panel.add_child(admin_panel)
 	var title := Label.new()
 	title.text = "⚙ АДМИН-ПАНЕЛЬ"
 	title.position = Vector2(22, 12)
@@ -332,10 +338,102 @@ func _admin_button(text_value: String, pos: Vector2, dimensions: Vector2, action
 	b.pressed.connect(action)
 	admin_panel.add_child(b)
 
-func _toggle_admin() -> void:
-	admin_panel.visible = not admin_panel.visible
-	if admin_panel.visible:
+func _build_settings_panel() -> void:
+	settings_panel = Panel.new()
+	settings_panel.position = Vector2(150, 90)
+	settings_panel.size = Vector2(660, 370)
+	settings_panel.visible = false
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.035, 0.055, 0.085, 0.99)
+	st.border_color = Color(0.22, 0.42, 0.60)
+	st.set_border_width_all(2)
+	st.set_corner_radius_all(16)
+	settings_panel.add_theme_stylebox_override("panel", st)
+	ui.add_child(settings_panel)
+	var title := Label.new()
+	title.text = "⚙ НАСТРОЙКИ ИГРЫ"
+	title.position = Vector2(22, 12)
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(0.87, 0.94, 1))
+	settings_panel.add_child(title)
+	var general_tab := _settings_button("Общие", Vector2(22, 48), Vector2(140, 38))
+	general_tab.pressed.connect(func():
+		admin_panel.visible = false
+		settings_status.text = "Настройки игры. Админ-раздел защищён PIN-кодом."
+		settings_status.visible = true
+		pin_input.visible = true
+		settings_admin_tab.visible = true
+	)
+	settings_admin_tab = _settings_button("Админ-панель", Vector2(175, 48), Vector2(180, 38))
+	settings_admin_tab.visible = false
+	settings_admin_tab.pressed.connect(func():
+		if admin_unlocked:
+			settings_status.visible = false
+			pin_input.visible = false
+			admin_panel.visible = true
+	)
+	settings_status = Label.new()
+	settings_status.text = "Введи PIN-код администратора, чтобы открыть закрытую вкладку."
+	settings_status.position = Vector2(22, 105)
+	settings_status.size = Vector2(610, 38)
+	settings_status.add_theme_font_size_override("font_size", 14)
+	settings_status.add_theme_color_override("font_color", Color(0.77, 0.85, 0.94))
+	settings_panel.add_child(settings_status)
+	pin_input = LineEdit.new()
+	pin_input.position = Vector2(22, 150)
+	pin_input.size = Vector2(230, 42)
+	pin_input.placeholder_text = "PIN администратора"
+	pin_input.secret = true
+	pin_input.max_length = 8
+	pin_input.add_theme_font_size_override("font_size", 16)
+	settings_panel.add_child(pin_input)
+	var unlock := _settings_button("Разблокировать", Vector2(265, 150), Vector2(190, 42))
+	unlock.pressed.connect(_check_admin_pin)
+	var close := _settings_button("✕ Закрыть", Vector2(22, 300), Vector2(170, 42))
+	close.pressed.connect(_toggle_settings)
+	var note := Label.new()
+	note.text = "PIN по умолчанию: 2468"
+	note.position = Vector2(22, 215)
+	note.add_theme_font_size_override("font_size", 12)
+	note.add_theme_color_override("font_color", Color(0.60, 0.72, 0.83))
+	settings_panel.add_child(note)
+
+func _settings_button(text_value: String, pos: Vector2, dimensions: Vector2) -> Button:
+	var b := Button.new()
+	b.text = text_value
+	b.position = pos
+	b.size = dimensions
+	b.add_theme_font_size_override("font_size", 14)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.14, 0.29, 0.43)
+	style.set_corner_radius_all(9)
+	b.add_theme_stylebox_override("normal", style)
+	settings_panel.add_child(b)
+	return b
+
+func _toggle_settings() -> void:
+	settings_panel.visible = not settings_panel.visible
+	if not settings_panel.visible:
+		admin_panel.visible = false
+		return
+	admin_panel.visible = false
+	settings_status.visible = true
+	pin_input.visible = true
+	settings_admin_tab.visible = admin_unlocked
+	settings_status.text = "Введи PIN-код администратора, чтобы открыть закрытую вкладку."
+
+func _check_admin_pin() -> void:
+	if pin_input.text == "2468":
+		admin_unlocked = true
+		settings_status.text = "Доступ разрешён. Вкладка «Админ-панель» открыта."
+		settings_admin_tab.visible = true
+		settings_admin_tab.disabled = false
+		pin_input.visible = false
 		admin_status_label.text = "Режим разработчика: параметры применяются сразу"
+	else:
+		settings_status.text = "Неверный PIN-код. Попробуй ещё раз."
+		pin_input.clear()
+		settings_admin_tab.visible = false
 
 func _admin_money() -> void:
 	cash += 10000
