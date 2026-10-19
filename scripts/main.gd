@@ -22,6 +22,8 @@ var car_nodes: Array[Node3D] = []
 var world_root: Node3D
 var event_label: Label
 var event_text: String = "Смена началась. Добро пожаловать, начальник!"
+var admin_panel: Panel
+var admin_status_label: Label
 
 const INCIDENTS := [
 	{"title":"Кража в магазине", "desc":"Подозреваемый замечен у выхода. Направь патруль.", "reward":360, "risk":10},
@@ -172,6 +174,10 @@ func _build_ui() -> void:
 	upgrade_buttons.append(upgrade3)
 	event_label = _label(event_text, Vector2(30,424), 12, Color(0.55,0.86,0.71))
 	event_label.size = Vector2(890, 24)
+	var admin_open := _button("⚙ АДМИН", Vector2(820, 8), Vector2(118, 30), Color(0.48, 0.18, 0.24))
+	admin_open.add_theme_font_size_override("font_size", 12)
+	admin_open.pressed.connect(_toggle_admin)
+	_build_admin_panel()
 
 func _label(text_value: String, pos: Vector2, font_size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -276,3 +282,108 @@ func _format_number(value: int) -> String:
 		if left > 0 and left % 3 == 0:
 			out += ","
 	return out
+
+func _build_admin_panel() -> void:
+	admin_panel = Panel.new()
+	admin_panel.position = Vector2(185, 115)
+	admin_panel.size = Vector2(590, 300)
+	admin_panel.visible = false
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.035, 0.055, 0.085, 0.99)
+	panel_style.border_color = Color(0.85, 0.24, 0.31)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(16)
+	admin_panel.add_theme_stylebox_override("panel", panel_style)
+	ui.add_child(admin_panel)
+	var title := Label.new()
+	title.text = "⚙ АДМИН-ПАНЕЛЬ"
+	title.position = Vector2(22, 12)
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1, 0.38, 0.42))
+	admin_panel.add_child(title)
+	admin_status_label = Label.new()
+	admin_status_label.text = "Управление параметрами игры"
+	admin_status_label.position = Vector2(22, 46)
+	admin_status_label.add_theme_font_size_override("font_size", 13)
+	admin_status_label.add_theme_color_override("font_color", Color(0.77, 0.85, 0.94))
+	admin_panel.add_child(admin_status_label)
+	_admin_button("💰 +$10,000", Vector2(22, 82), Vector2(170, 44), func(): _admin_money())
+	_admin_button("👮 +10 сотрудников", Vector2(207, 82), Vector2(170, 44), func(): _admin_staff())
+	_admin_button("🛡️ Безопасность 100%", Vector2(392, 82), Vector2(175, 44), func(): _admin_safety())
+	_admin_button("🏢 Уровень участка +5", Vector2(22, 140), Vector2(170, 44), func(): _admin_level())
+	_admin_button("🚓 +5 машин", Vector2(207, 140), Vector2(170, 44), func(): _admin_vehicles())
+	_admin_button("🚨 Новый вызов", Vector2(392, 140), Vector2(175, 44), func(): _admin_new_call())
+	_admin_button("🔄 Сбросить показатели", Vector2(22, 198), Vector2(270, 44), func(): _admin_reset_stats())
+	_admin_button("✕ ЗАКРЫТЬ", Vector2(307, 198), Vector2(260, 44), func(): _toggle_admin())
+
+func _admin_button(text_value: String, pos: Vector2, dimensions: Vector2, action: Callable) -> void:
+	var b := Button.new()
+	b.text = text_value
+	b.position = pos
+	b.size = dimensions
+	b.add_theme_font_size_override("font_size", 13)
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.14, 0.24, 0.36)
+	st.set_corner_radius_all(9)
+	b.add_theme_stylebox_override("normal", st)
+	var hov := st.duplicate()
+	hov.bg_color = Color(0.22, 0.36, 0.51)
+	b.add_theme_stylebox_override("hover", hov)
+	b.pressed.connect(action)
+	admin_panel.add_child(b)
+
+func _toggle_admin() -> void:
+	admin_panel.visible = not admin_panel.visible
+	if admin_panel.visible:
+		admin_status_label.text = "Режим разработчика: параметры применяются сразу"
+
+func _admin_money() -> void:
+	cash += 10000
+	event_text = "Админ: добавлено $10,000."
+	_refresh_ui()
+	admin_status_label.text = "Баланс увеличен на $10,000"
+
+func _admin_staff() -> void:
+	officers += 10
+	event_text = "Админ: добавлено 10 сотрудников."
+	_refresh_ui()
+	admin_status_label.text = "В штат добавлено 10 сотрудников"
+
+func _admin_safety() -> void:
+	safety = 100
+	event_text = "Админ: безопасность города установлена на 100%."
+	_refresh_ui()
+	admin_status_label.text = "Безопасность города: 100%"
+
+func _admin_level() -> void:
+	station_level += 5
+	event_text = "Админ: уровень участка увеличен на 5."
+	_refresh_ui()
+	admin_status_label.text = "Уровень участка повышен на 5"
+
+func _admin_vehicles() -> void:
+	vehicles += 5
+	for i in range(5):
+		var car := Node3D.new()
+		world_root.add_child(car)
+		_box(car, Vector3(1.5,0.45,0.8), Vector3.ZERO, Color(0.82,0.88,0.94))
+		_box(car, Vector3(0.75,0.3,0.83), Vector3(0,0.32,0), Color(0.10,0.22,0.34))
+		car.position = Vector3(-8 + (car_nodes.size() % 8) * 2, 0.35, 7.1)
+		car_nodes.append(car)
+	event_text = "Админ: добавлено 5 машин."
+	_refresh_ui()
+	admin_status_label.text = "В автопарк добавлено 5 машин"
+
+func _admin_new_call() -> void:
+	_new_call()
+	event_text = "Админ: вызов создан принудительно."
+	_refresh_ui()
+	admin_status_label.text = "Создан новый вызов диспетчера"
+
+func _admin_reset_stats() -> void:
+	calls_done = 0
+	safety = 12
+	station_level = 1
+	event_text = "Админ: статистика сброшена. Бюджет и персонал сохранены."
+	_refresh_ui()
+	admin_status_label.text = "Сброшены уровень, безопасность и счётчик вызовов"
