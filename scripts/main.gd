@@ -29,6 +29,11 @@ var settings_status: Label
 var pin_input: LineEdit
 var admin_unlocked: bool = false
 var settings_admin_tab: Button
+var departments_panel: Panel
+var department_labels: Dictionary = {}
+var department_levels: Dictionary = {"Reception": 0, "Cells": 0, "Dispatch": 0, "Training": 0}
+var department_income: Dictionary = {"Reception": 3, "Cells": 2, "Dispatch": 5, "Training": 4}
+var department_costs: Dictionary = {"Reception": 650, "Cells": 850, "Dispatch": 1100, "Training": 950}
 
 const INCIDENTS := [
 	{"title":"Кража в магазине", "desc":"Подозреваемый замечен у выхода. Направь патруль.", "reward":360, "risk":10},
@@ -102,6 +107,16 @@ func _build_world() -> void:
 	_box(world_root, Vector3(4.0, 0.35, 3.7), Vector3(-12.0, 0.18, -8.0), Color(0.65, 0.73, 0.77))
 	_box(world_root, Vector3(3.7, 1.7, 3.4), Vector3(-12.0, 1.15, -8.0), Color(0.40, 0.64, 0.68), "FORENSICS")
 	# Trees and low-rise city blocks.
+	# Expandable department wings, arranged as a compact isometric campus.
+	_box(world_root, Vector3(4.8, 0.3, 3.8), Vector3(8.0, 0.15, -8.2), Color(0.65, 0.73, 0.77))
+	_box(world_root, Vector3(4.4, 1.8, 3.4), Vector3(8.0, 1.2, -8.2), Color(0.30, 0.48, 0.59), "DISPATCH")
+	_box(world_root, Vector3(4.2, 0.2, 3.2), Vector3(8.0, 2.2, -8.2), Color(0.10, 0.20, 0.31))
+	_box(world_root, Vector3(4.8, 0.3, 3.8), Vector3(1.8, 0.15, -8.2), Color(0.65, 0.73, 0.77))
+	_box(world_root, Vector3(4.4, 1.8, 3.4), Vector3(1.8, 1.2, -8.2), Color(0.36, 0.50, 0.61), "CELLS")
+	_box(world_root, Vector3(4.2, 0.2, 3.2), Vector3(1.8, 2.2, -8.2), Color(0.10, 0.20, 0.31))
+	_box(world_root, Vector3(4.8, 0.3, 3.8), Vector3(8.0, 0.15, 1.5), Color(0.65, 0.73, 0.77))
+	_box(world_root, Vector3(4.4, 1.8, 3.4), Vector3(8.0, 1.2, 1.5), Color(0.35, 0.58, 0.52), "TRAINING")
+	_box(world_root, Vector3(4.2, 0.2, 3.2), Vector3(8.0, 2.2, 1.5), Color(0.10, 0.20, 0.31))
 	for p in [Vector3(-16,0,-2), Vector3(-16,0,3), Vector3(-14,0,8), Vector3(16,0,-7), Vector3(16,0,-2), Vector3(15,0,9), Vector3(-7,0,-10), Vector3(0,0,-10), Vector3(6,0,9)]:
 		_box(world_root, Vector3(0.35, 1.0, 0.35), p + Vector3(0,0.5,0), Color(0.30,0.20,0.13))
 		var crown := _box(world_root, Vector3(1.4, 1.4, 1.4), p + Vector3(0,1.5,0), Color(0.19,0.48,0.30))
@@ -180,10 +195,14 @@ func _build_ui() -> void:
 	event_label = _label(event_text, Vector2(30,424), 12, Color(0.55,0.86,0.71))
 	event_label.size = Vector2(890, 24)
 	var settings_open := _button("⚙ НАСТРОЙКИ", Vector2(812, 8), Vector2(136, 30), Color(0.15, 0.31, 0.46))
+	var departments_open := _button("ОТДЕЛЫ", Vector2(650, 8), Vector2(145, 30), Color(0.12, 0.42, 0.37))
+	departments_open.add_theme_font_size_override("font_size", 12)
+	departments_open.pressed.connect(_toggle_departments)
 	settings_open.add_theme_font_size_override("font_size", 12)
 	settings_open.pressed.connect(_toggle_settings)
 	_build_settings_panel()
 	_build_admin_panel()
+	_build_department_panel()
 
 func _label(text_value: String, pos: Vector2, font_size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -213,7 +232,103 @@ func _button(text_value: String, pos: Vector2, dimensions: Vector2, color: Color
 	return b
 
 func _income_per_second() -> int:
-	return 1 + officers + vehicles * 2 + station_level * 2
+	return 1 + officers + vehicles * 2 + station_level * 2 + _department_total_income()
+
+func _department_total_income() -> int:
+	var total := 0
+	for dept in department_levels.keys():
+		total += int(department_levels[dept]) * int(department_income[dept])
+	return total
+
+func _build_department_panel() -> void:
+	departments_panel = Panel.new()
+	departments_panel.position = Vector2(165, 78)
+	departments_panel.size = Vector2(630, 370)
+	departments_panel.visible = false
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.035, 0.055, 0.085, 0.99)
+	st.border_color = Color(0.18, 0.55, 0.48)
+	st.set_border_width_all(2)
+	st.set_corner_radius_all(16)
+	departments_panel.add_theme_stylebox_override("panel", st)
+	ui.add_child(departments_panel)
+	var title := Label.new()
+	title.text = "ОТДЕЛЫ ПОЛИЦЕЙСКОГО УЧАСТКА"
+	title.position = Vector2(22, 12)
+	title.add_theme_font_size_override("font_size", 21)
+	title.add_theme_color_override("font_color", Color(0.75, 1.0, 0.91))
+	departments_panel.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "Развивай инфраструктуру: каждый уровень приносит доход каждую секунду."
+	subtitle.position = Vector2(22, 43)
+	subtitle.add_theme_font_size_override("font_size", 12)
+	subtitle.add_theme_color_override("font_color", Color(0.75, 0.84, 0.91))
+	departments_panel.add_child(subtitle)
+	var names := ["Reception", "Cells", "Dispatch", "Training"]
+	var captions := ["Приёмная", "Изолятор", "Диспетчерская", "Учебный центр"]
+	for i in range(names.size()):
+		var dept: String = names[i]
+		var y := 82 + i * 53
+		var info := Label.new()
+		info.text = captions[i] + "  •  уровень " + str(department_levels[dept]) + "  •  +$" + str(department_income[dept]) + "/сек за уровень"
+		info.position = Vector2(22, y + 8)
+		info.size = Vector2(350, 30)
+		info.add_theme_font_size_override("font_size", 13)
+		info.add_theme_color_override("font_color", Color(0.85, 0.91, 0.97))
+		departments_panel.add_child(info)
+		department_labels[dept] = info
+		var cost := int(department_costs[dept])
+		var upgrade := Button.new()
+		upgrade.text = "УЛУЧШИТЬ  $" + _format_number(cost)
+		upgrade.position = Vector2(390, y)
+		upgrade.size = Vector2(210, 38)
+		upgrade.add_theme_font_size_override("font_size", 12)
+		var btn_style := StyleBoxFlat.new()
+		btn_style.bg_color = Color(0.12, 0.36, 0.34)
+		btn_style.set_corner_radius_all(8)
+		upgrade.add_theme_stylebox_override("normal", btn_style)
+		upgrade.pressed.connect(func(): _upgrade_department(dept))
+		departments_panel.add_child(upgrade)
+	var close := Button.new()
+	close.text = "ЗАКРЫТЬ"
+	close.position = Vector2(22, 320)
+	close.size = Vector2(150, 34)
+	close.pressed.connect(_toggle_departments)
+	departments_panel.add_child(close)
+
+func _toggle_departments() -> void:
+	departments_panel.visible = not departments_panel.visible
+	if departments_panel.visible:
+		settings_panel.visible = false
+		admin_panel.visible = false
+		_refresh_department_labels()
+
+func _refresh_department_labels() -> void:
+	for dept in department_labels.keys():
+		var captions := {"Reception": "Приёмная", "Cells": "Изолятор", "Dispatch": "Диспетчерская", "Training": "Учебный центр"}
+		var info: Label = department_labels[dept]
+		info.text = str(captions[dept]) + "  •  уровень " + str(department_levels[dept]) + "  •  +$" + str(int(department_income[dept]) * int(department_levels[dept])) + "/сек"
+
+func _upgrade_department(dept: String) -> void:
+	var cost := int(department_costs[dept]) * (int(department_levels[dept]) + 1)
+	if cash < cost:
+		event_text = "Недостаточно средств. Нужно $" + _format_number(cost) + "."
+		_refresh_ui()
+		return
+	cash -= cost
+	department_levels[dept] = int(department_levels[dept]) + 1
+	station_level += 1
+	if dept == "Reception":
+		officers += 1
+	elif dept == "Cells":
+		safety = mini(100, safety + 4)
+	elif dept == "Dispatch":
+		calls_done += 1
+	elif dept == "Training":
+		officers += 2
+	event_text = "Отдел улучшен: " + dept + ". Доход отдела вырос."
+	_refresh_department_labels()
+	_refresh_ui()
 
 func _new_call() -> void:
 	active_call = INCIDENTS[randi() % INCIDENTS.size()].duplicate(true)
