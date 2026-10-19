@@ -103,11 +103,11 @@ class MainActivity : Activity() {
         calls--; callsHandled++
         money += reward + officers * 8
         reputation += rep
-        log("Вызов «$name» выполнен. Награда: $\u0024{reward + officers * 8}.")
+        log("Вызов «$name» выполнен. Награда: \${reward + officers * 8}.")
         saveAndRefresh()
     }
     private fun updateStats() {
-        stats.text = "💵  БЮДЖЕТ   $\u0024{money}\n⭐  РЕПУТАЦИЯ   $reputation\n👮  ОФИЦЕРЫ   $officers     🏢 УЧАСТОК   ур. $stationLevel\n📟  ВЫЗОВЫ   $calls     ✓ ЗАДАНИЙ   $callsHandled"
+        stats.text = "💵  БЮДЖЕТ   \${money}\n⭐  РЕПУТАЦИЯ   $reputation\n👮  ОФИЦЕРЫ   $officers     🏢 УЧАСТОК   ур. $stationLevel\n📟  ВЫЗОВЫ   $calls     ✓ ЗАДАНИЙ   $callsHandled"
     }
     private fun log(message: String) {
         if (!::feed.isInitialized) return
