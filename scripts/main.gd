@@ -9,6 +9,8 @@ var calls_done: int = 0
 var upgrade_level: Dictionary = {"HQ": 0, "Garage": 0, "Lab": 0}
 var active_call: Dictionary = {}
 var income_timer: float = 0.0
+var save_timer: float = 0.0
+const SAVE_PATH := "user://police_tycoon_save.cfg"
 var ui: CanvasLayer
 var cash_label: Label
 var staff_label: Label
@@ -45,6 +47,7 @@ const INCIDENTS := [
 ]
 
 func _ready() -> void:
+	_load_game()
 	_build_world()
 	_build_ui()
 	_refresh_ui()
@@ -56,10 +59,50 @@ func _process(delta: float) -> void:
 		income_timer = 0.0
 		cash += _income_per_second()
 		_refresh_ui()
+	save_timer += delta
+	if save_timer >= 10.0:
+		save_timer = 0.0
+		_save_game()
 	for i in range(car_nodes.size()):
 		var car := car_nodes[i]
 		if is_instance_valid(car):
 			car.position.x = -8.0 + fposmod(Time.get_ticks_msec() / 1000.0 * (0.45 + i * 0.12) + i * 5.0, 16.0)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		_save_game()
+
+func _save_game() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("game", "cash", cash)
+	cfg.set_value("game", "officers", officers)
+	cfg.set_value("game", "vehicles", vehicles)
+	cfg.set_value("game", "safety", safety)
+	cfg.set_value("game", "station_level", station_level)
+	cfg.set_value("game", "calls_done", calls_done)
+	cfg.set_value("game", "upgrade_level", upgrade_level)
+	cfg.set_value("game", "department_levels", department_levels)
+	cfg.set_value("game", "saved_at", int(Time.get_unix_time_from_system()))
+	cfg.save(SAVE_PATH)
+
+func _load_game() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return
+	cash = int(cfg.get_value("game", "cash", cash))
+	officers = int(cfg.get_value("game", "officers", officers))
+	vehicles = int(cfg.get_value("game", "vehicles", vehicles))
+	safety = int(cfg.get_value("game", "safety", safety))
+	station_level = int(cfg.get_value("game", "station_level", station_level))
+	calls_done = int(cfg.get_value("game", "calls_done", calls_done))
+	upgrade_level = cfg.get_value("game", "upgrade_level", upgrade_level)
+	department_levels = cfg.get_value("game", "department_levels", department_levels)
+	var saved_at := int(cfg.get_value("game", "saved_at", int(Time.get_unix_time_from_system())))
+	var away_seconds: int = clampi(int(Time.get_unix_time_from_system()) - saved_at, 0, 43200)
+	var offline_earnings: int = away_seconds * _income_per_second()
+	cash += offline_earnings
+	if offline_earnings > 0:
+		event_text = "С возвращением! Пока тебя не было, участок заработал $" + _format_number(offline_earnings) + "."
 
 func _mat(color: Color, roughness: float = 0.9) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
